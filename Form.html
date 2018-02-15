@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Poll</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+
+    <!-- jQuery library -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+    <!-- Latest compiled JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+</head>
+<body>
+<div style="width: 750px; margin-left: 20px; margin-top: 20px" id="info">
+
+    <div class="form-group">
+        <label for="select_team">Изберете тим:</label>
+        <select class="form-control" id="select_team">
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="username">Внесете корисничко име:</label>
+        <input class="form-control" id="username">
+    </div>
+    <div class="form-group">
+        <label for="password">Внесете лозинка:</label>
+        <input class="form-control" id="password" type="password">
+    </div>
+
+    <div class="form-group">
+        <button type="button" class="btn btn-default" id="login" onclick="tryLogin()">Потврди</button>
+    </div>
+</div>
+<script src="app.js"></script>
+</body>
+<script>
+    var response = "";
+    var team;
+    var username;
+    var questions;
+    $.ajax({
+        type: "GET",
+        url: "http://localhost:3000/teams",
+        async: false,
+        success: function (text) {
+            response = text;
+        }
+    });
+    var i;
+    for (i = 0; i < response.length; i++) {
+        var option = document.createElement("option");
+        option.innerHTML = response[i]["teamName"];
+        document.getElementById("select_team").appendChild(option);
+    }
+
+    function tryLogin() {
+        var e = document.getElementById("select_team");
+        team = e.options[e.selectedIndex].text;
+        username = document.getElementById("username").value;
+        var logInfo = {
+            team: team,
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value
+        };
+        $.ajax({
+            type: "POST",
+            url: "http://localhost:3000/login",
+            data: JSON.stringify(logInfo),
+            dataType: "json",
+            cache: false,
+            contentType: "application/json",
+            success: function (response) {
+                console.log(response);
+                var holder = document.getElementById("holder");
+                if (holder) {
+                    holder.parentNode.removeChild(holder);
+                }
+                holder = document.createElement("div");
+                holder.setAttribute("id", "holder");
+                document.getElementById("info").appendChild(holder);
+                if (response.length === 0) {
+                    var span = document.createElement("span");
+                    span.style.fontSize = "18px";
+                    span.style.color = "red";
+                    span.appendChild(document.createTextNode("Не постои таков вработен!"));
+                    document.getElementById("holder").appendChild(span);
+                }
+                else {
+                    $.ajax({
+                        type: "POST",
+                        url: "http://localhost:3000/questions",
+                        data: JSON.stringify(logInfo),
+                        dataType: "json",
+                        cache: false,
+                        contentType: "application/json",
+                        success: function (res) {
+                            questions = res;
+                            var i;
+                            for (i = 0; i < res.length; i++) {
+                                var div = document.createElement("div");
+                                div.innerHTML = res[i]["question"];
+                                var form = document.createElement("form");
+                                form.setAttribute("id", res[i]["idQuestion"]);
+                                var j;
+                                for (j = 1; j <= 5; j++) {
+                                    var label = document.createElement("label");
+                                    label.setAttribute("class", "radio-inline");
+                                    var input = document.createElement("input");
+                                    input.setAttribute("type", "radio");
+                                    input.setAttribute("name", "inlineRadioOptions" + i);
+                                    input.setAttribute("value", j.toString());
+                                    var grade = document.createElement("div");
+                                    grade.innerHTML = j.toString();
+                                    label.appendChild(input);
+                                    label.appendChild(grade);
+                                    form.appendChild(label);
+                                }
+                                document.getElementById("holder").appendChild(div);
+                                document.getElementById("holder").appendChild(form);
+                                document.getElementById("holder").innerHTML += "<br>";
+                            }
+                            if (res.length === 0) {
+                                document.getElementById("holder").appendChild(document.createTextNode("Немате преостанати анкети за пополнување!"));
+                            }
+                            else {
+                                var button = document.createElement("button");
+                                button.setAttribute("class", "btn btn-default");
+                                button.setAttribute("onclick", "submit()");
+                                button.innerHTML = "Потврди";
+                                document.getElementById("holder").appendChild(button);
+                            }
+                        }
+
+                    });
+                }
+            }
+        });
+    }
+
+    function submit() {
+        var i;
+        var answers = {
+            team: team,
+            username: username
+        };
+        for (i = 0; i < questions.length; i++) {
+            answers[questions[i]["idQuestion"]] = document.getElementById(questions[i]["idQuestion"]).elements.namedItem("inlineRadioOptions" + i).value;
+        }
+        $.ajax({
+            type: "POST",
+            url: "http://localhost:3000/submit",
+            data: JSON.stringify(answers),
+            dataType: "json",
+            cache: false,
+            contentType: "application/json",
+            success: function (res) {
+            }
+        });
+        var holder = document.getElementById("holder");
+        holder.parentNode.removeChild(holder);
+        holder = document.createElement("div");
+        holder.setAttribute("id", "holder");
+        var span = document.createElement("span");
+        span.style.fontSize = "18px";
+        span.style.color = "green";
+        span.appendChild(document.createTextNode("Пополнувањето е успешно!"));
+        document.getElementById("info").appendChild(holder);
+        document.getElementById("holder").appendChild(span);
+    }
+</script>
+</html>
