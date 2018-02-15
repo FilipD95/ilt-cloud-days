@@ -41,7 +41,9 @@ app.post('/login', function (req, res) {
 app.post('/questions', function (req, res) {
     var month = (new Date()).getMonth() + 1;
     var year = (new Date()).getFullYear();
-    connection.query('SELECT q.idQuestion, q.question FROM TeamQuestions t JOIN Question q ON t.question = q.idQuestion WHERE t.team = "' + req.body.team + '"',
+    connection.query('SELECT q.idQuestion, q.question FROM TeamQuestions t JOIN Question q ON t.question = q.idQuestion WHERE t.team = "' + req.body.team + '"'
+        + 'AND EXISTS(SELECT * FROM Poll p WHERE p.employee = "' + req.body.username + '" AND p.team = "' + req.body.team + '" AND NOT (YEAR(p.date) = "'
+        + year + '" AND MONTH(p.date) = "' + month + '"))',
         function (error, results, fields) {
             if (error) {
                 res.send(error);
@@ -73,6 +75,15 @@ app.post('/submit', function (req, res) {
                 res.send(error);
             }
         });
+});
+
+app.post('/visualize', function (req, res) {
+    connection.query('SELECT SUM(`5`) "5", SUM(`4`) "4", SUM(`3`) "3", SUM(`2`) "2", SUM(`1`) "1" FROM TeamQuestions WHERE team = "' + req.body.team + '" GROUP BY team', function(error, r, fields) {
+        if(error) {
+            res.send(error);
+        }
+        res.send(r);
+    })
 });
 
 app.listen(3000);

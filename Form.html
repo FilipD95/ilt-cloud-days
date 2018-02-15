@@ -12,7 +12,7 @@
 
     <!-- Latest compiled JavaScript -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
-
+    <script src="https://d3js.org/d3.v3.min.js"></script>
 </head>
 <body>
 <div style="width: 750px; margin-left: 20px; margin-top: 20px" id="info">
@@ -31,9 +31,14 @@
         <input class="form-control" id="password" type="password">
     </div>
 
-    <div class="form-group">
+    <div class="form-group" style="display: inline-block">
         <button type="button" class="btn btn-default" id="login" onclick="tryLogin()">Потврди</button>
     </div>
+
+    <div class="form-group" style="display: inline-block">
+        <button type="button" class="btn btn-default" id="visualize" onclick="visualize()">Статистика</button>
+    </div>
+
 </div>
 <script src="app.js"></script>
 </body>
@@ -74,7 +79,6 @@
             cache: false,
             contentType: "application/json",
             success: function (response) {
-                console.log(response);
                 var holder = document.getElementById("holder");
                 if (holder) {
                     holder.parentNode.removeChild(holder);
@@ -86,7 +90,7 @@
                     var span = document.createElement("span");
                     span.style.fontSize = "18px";
                     span.style.color = "red";
-                    span.appendChild(document.createTextNode("Не постои таков вработен!"));
+                    span.appendChild(document.createTextNode("Не постои таков вработен во селектираниот тим!"));
                     document.getElementById("holder").appendChild(span);
                 }
                 else {
@@ -171,5 +175,167 @@
         document.getElementById("info").appendChild(holder);
         document.getElementById("holder").appendChild(span);
     }
+
+    function visualize() {
+        var e = document.getElementById("select_team");
+        team = e.options[e.selectedIndex].text;
+        username = document.getElementById("username").value;
+        var logInfo = {
+            team: team,
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value
+        };
+        $.ajax({
+            type: "POST",
+            url: "http://localhost:3000/visualize",
+            data: JSON.stringify(logInfo),
+            dataType: "json",
+            cache: false,
+            contentType: "application/json",
+            success: function (response) {
+                var holder = document.getElementById("holder");
+                if (holder) {
+                    holder.parentNode.removeChild(holder);
+                }
+                holder = document.createElement("div");
+                holder.setAttribute("id", "holder");
+                document.getElementById("info").appendChild(holder);
+
+
+
+                var data = response[0];
+
+                var myData = [];
+
+                var key;
+
+                for(key in data) {
+                    myData.push({year: key, kwh: data[key]});
+                }
+
+                var years = myData.map(function (d) {
+                    return d.year;
+                });
+                var KWh = myData.map(function (d) {
+                    return d.kwh;
+                });
+
+                var maxKWh = d3.max(KWh);
+
+                var graphWidth = 500;
+                var graphHeight = 250;
+                var margin = {left: 40, right: 10, top: 30, bottom: 110};
+                var svgWidth = graphWidth + margin.left + margin.right;
+                var svgHeight = graphHeight + margin.top + margin.bottom;
+
+                var svg = d3.select("#holder")
+                    .append("svg")
+                    .attr("width", svgWidth)
+                    .attr("height", svgHeight);
+
+                var graph = svg
+                    .append("g")
+                    .attr("transform", "translate(" + margin.left + ", " + margin.top + ")");
+
+                var bands = d3.scale
+                    .ordinal()
+                    .domain(years)
+                    .rangeBands([0, graphWidth], 0.05);
+
+                var yScale = d3.scale
+                    .linear()
+                    .domain([0, maxKWh])
+                    .range([0, graphHeight]);
+
+                function translator(d, i) {
+                    return "translate(" + bands.range()[i] + ", " + (graphHeight - yScale(d.kwh)) + ")";
+                }
+
+                var bars = graph.selectAll("g")
+                    .data(myData)
+                    .enter()
+                    .append("g")
+                    .attr("transform", translator);
+
+                bars.append("rect")
+                    .attr("fill", "steelblue")
+                    .attr("width", bands.rangeBand())
+                    .attr("height", function (d) {
+                        return yScale(d.kwh);
+                    })
+                    .on("mouseenter", function () {
+                        d3.select(this).attr("fill", "fuchsia");
+                    })
+                    .on("mouseout", function () {
+                        d3.select(this).attr("fill", "steelblue");
+                    });
+
+                bars.append("text")
+                    .text(function (d) {
+                        return d.kwh;
+                    })
+                    .attr("font-family", "sans-serif")
+                    .attr("fill", "white")
+                    .attr("font-size", bands.rangeBand() / 4)
+                    .attr("text-anchor", "middle")
+                    .attr("transform", "translate(" + bands.rangeBand() / 2 + ", 30)");
+
+                var leftAxisGroup = svg.append("g");
+                leftAxisGroup
+                    .attr("transform", "translate(" + margin.left + ", " + margin.top + ")");
+
+                var yAxisScale = d3.scale
+                    .linear()
+                    .domain([maxKWh, 0])
+                    .range([0, graphHeight]);
+
+                var leftAxis = d3.svg.axis()
+                    .orient("left")
+                    .scale(yAxisScale);
+
+                var leftAxisNodes = leftAxisGroup.call(leftAxis);
+                styleAxisNodes(leftAxisNodes);
+
+                var bottomAxisScale = d3.scale.ordinal()
+                    .domain(years)
+                    .rangeBands([0, graphWidth]);
+
+                var bottomAxis = d3.svg
+                    .axis()
+                    .scale(bottomAxisScale)
+                    .orient("bottom");
+
+                var bottomAxisX = margin.left;
+                var bottomAxisY = svgHeight - margin.bottom;
+
+                var bottomAxisGroup = svg.append("g")
+                    .attr("transform", "translate(" + bottomAxisX + ", " + bottomAxisY + ")");
+
+                var bottomAxisNodes = bottomAxisGroup.call(bottomAxis);
+                styleAxisNodes(bottomAxisNodes);
+
+                bottomAxisNodes.selectAll("text")
+                    .style("text-anchor", "end")
+                    .attr("dx", -10)
+                    .attr("dy", -5)
+                    .attr("transform", "rotate(-90)");
+
+                function styleAxisNodes(axisNodes) {
+                    axisNodes.selectAll(".domain")
+                        .attr("fill", "none")
+                        .attr("stroke-width", 1)
+                        .attr("stroke", "black");
+                    axisNodes.selectAll(".tick line")
+                        .attr("fill", "none")
+                        .attr("stroke-width", 1)
+                        .attr("stroke", "black");
+                    axisNodes.selectAll("text")
+                        .attr("font-family", "sans-serif")
+                        .attr("font-size", "14px");
+                }
+            }
+        });
+    }
+
 </script>
 </html>
